@@ -1,0 +1,85 @@
+plugins {
+    id 'java'
+    id 'eclipse'
+    id 'io.quarkus'
+}
+
+repositories {
+    mavenCentral()
+}
+
+group = providers.gradleProperty('groupId').get()
+version = providers.gradleProperty('serviceVersion').get()
+
+def lombokVersion = '1.18.48'
+def mapstructVersion = '1.6.3'
+
+dependencies {
+    implementation enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}")
+    // The Quarkus plugin generates protobuf messages and gRPC stubs from src/main/proto.
+    implementation 'io.quarkus:quarkus-grpc'
+    implementation 'io.quarkus:quarkus-rest-client-jackson'
+    implementation 'io.quarkus:quarkus-hibernate-orm-panache'
+    implementation 'io.quarkiverse.rabbitmqclient:quarkus-rabbitmq-client:3.4.1'
+    implementation 'io.quarkus:quarkus-jdbc-postgresql'
+    implementation 'io.quarkus:quarkus-arc'
+    implementation 'io.quarkus:quarkus-rest'
+    implementation 'io.quarkus:quarkus-micrometer-registry-prometheus'
+    implementation 'io.quarkus:quarkus-smallrye-health'
+    implementation "org.mapstruct:mapstruct:${mapstructVersion}"
+
+    testImplementation 'io.quarkus:quarkus-junit'
+    testImplementation 'io.rest-assured:rest-assured'
+}
+
+// Apply processors to main, test and Quarkus native-test source sets.
+sourceSets.configureEach {
+    dependencies.add(compileOnlyConfigurationName, "org.projectlombok:lombok:${lombokVersion}")
+    dependencies.add(annotationProcessorConfigurationName, "org.projectlombok:lombok:${lombokVersion}")
+    dependencies.add(annotationProcessorConfigurationName, 'org.projectlombok:lombok-mapstruct-binding:0.2.0')
+    dependencies.add(annotationProcessorConfigurationName, "org.mapstruct:mapstruct-processor:${mapstructVersion}")
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+// Quarkus attaches generated code to compileJava, but not to the Eclipse model
+// consumed by Buildship / VS Code / VSCodium. Expose it only to the IDE model.
+// IDEs query this model before code generation runs, so do not read a task output provider here.
+def grpcGeneratedPath = layout.buildDirectory.dir('classes/java/quarkus-generated-sources/grpc')
+        .map { project.relativePath(it.asFile) }
+
+eclipse {
+    synchronizationTasks tasks.named('quarkusGenerateCode')
+    classpath.file.whenMerged { classpath ->
+        def grpcPath = grpcGeneratedPath.get()
+        if (!classpath.entries.any { it.kind == 'src' && it.path == grpcPath }) {
+            def grpcSource = new org.gradle.plugins.ide.eclipse.model.SourceFolder(grpcPath, 'bin/main')
+            grpcSource.entryAttributes['gradle_scope'] = 'main'
+            grpcSource.entryAttributes['gradle_used_by_scope'] = 'main,test,integrationTest,native-test'
+            classpath.entries.add(grpcSource)
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += [
+        '-parameters',
+        '-Amapstruct.defaultComponentModel=jakarta-cdi',
+        '-Amapstruct.defaultInjectionStrategy=constructor',
+        '-Amapstruct.suppressGeneratorTimestamp=true'
+    ]
+}
+
+processResources {
+    def identity = [serviceName: providers.gradleProperty('serviceName').get(),
+                    serviceVersion: project.version.toString(),
+                    serviceLevel: providers.gradleProperty('serviceLevel').get()]
+    inputs.properties(identity)
+    filesMatching('application.properties') {
+        filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: identity)
+    }
+}
