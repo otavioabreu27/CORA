@@ -1,0 +1,8 @@
+# For Prometheus running on the same host as the service. Adapt targets for containers.
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: l1-service-template
+    metrics_path: /q/metrics
+    static_configs:
+      - targets: ['localhost:8080']
