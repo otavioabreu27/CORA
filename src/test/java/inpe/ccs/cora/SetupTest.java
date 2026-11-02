@@ -1,4 +1,4 @@
-package inpe.ccs.l1servicetemplate;
+package inpe.ccs.cora;
 
 import static org.junit.jupiter.api.Assertions.*;
 import java.nio.file.*;

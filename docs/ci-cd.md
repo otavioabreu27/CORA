@@ -1,4 +1,4 @@
-# CI/CD do template
+# CI/CD do CORA
 
 O workflow [ci-cd.yml](../.github/workflows/ci-cd.yml) executa no GitHub Actions.
 A entrega termina na publicação da imagem no GitHub Container Registry (GHCR).
@@ -25,16 +25,15 @@ pelo push e outra pelo PR: a segunda verifica a combinação com a branch de des
 
 O job `Tests` é pré-requisito da publicação nas duas branches. Em `main`, os testes
 do executável também precisam passar antes do login no registry. Eles cobrem
-chamadas gRPC com deadline, REST, liveness/readiness e métricas HTTP/gRPC
-e do pool PostgreSQL. Esses testes acessam o processo empacotado externamente,
-sem injeção CDI no teste e sem exigir métricas exclusivas da JVM. Os relatórios
+REST, liveness/readiness e métricas HTTP/JVM. Esses testes acessam o processo
+empacotado externamente, sem injeção CDI no teste e sem exigir banco de dados. Os relatórios
 JUnit/HTML ficam nos artefatos da execução por 14 dias, inclusive em caso de falha.
 Execuções antigas de branches de trabalho/PRs podem ser canceladas; publicações
 da mesma branch são serializadas e não são interrompidas por um push mais recente.
 
 ## Configuração no GitHub
 
-1. Adicione os arquivos do template ao repositório e faça push para ativar o workflow.
+1. Faça push do repositório para ativar o workflow.
 2. Habilite GitHub Actions e permita as actions utilizadas, caso a organização
    tenha uma lista de permissões. As referências estão fixadas por commit SHA.
 3. Permita publicação de packages pelo `GITHUB_TOKEN`. O job de publicação pede
@@ -47,7 +46,7 @@ da mesma branch são serializadas e não são interrompidas por um push mais rec
    descritas no README. Use o digest publicado como referência da versão.
 
 O nome da imagem vem de `github.repository` convertido para minúsculas. Criar um
-serviço a partir deste template não exige editar o workflow nem executar o setup
+serviço a partir do template não exige editar o workflow nem executar o setup
 para ajustar esse nome: ele acompanha o proprietário/nome do repositório GitHub.
 
 ## Imagens e versões
@@ -66,16 +65,16 @@ em `gradle.properties`; a equipe deve atualizá-la conforme sua política de ver
 ## Ambiente de build
 
 - Runner Linux `ubuntu-24.04`, arquitetura AMD64, Java Temurin 25 e Gradle Wrapper.
-- Docker disponível para PostgreSQL Dev Services e compilação nativa em contêiner.
-  Os testes usam bancos descartáveis; nenhuma credencial de produção é necessária.
+- Docker disponível para compilação nativa em contêiner; os testes JVM não usam
+  banco de dados.
 - O build nativo usa Mandrel (distribuição de GraalVM voltada ao Quarkus), JDK 25,
   UBI 9, fixado por digest no workflow. O runtime micro também usa UBI 9.
 - O compilador nativo usa heap máximo de 4 GiB, além da memória de Gradle, Docker
   e sistema. Reserve pelo menos 8 GiB para o runner; aumente recursos/limite se o
   serviço crescer. A arquitetura alvo usa `-march=compatibility`.
-- `testNative` inicia o artefato com perfil `test`, usando o schema descartável
-  (`drop-and-create`). A imagem publicada inicia normalmente no perfil `prod`,
-  que requer configuração PostgreSQL e schema provisionado (`validate`).
+- `testNative` inicia o artefato com perfil `test`, sem banco de dados. A
+  imagem publicada inicia no perfil `prod` e depende apenas do L2
+  `orbital-dynamics` em `ORBITAL_DYNAMICS_HOST`/`ORBITAL_DYNAMICS_PORT`.
 - Cache Gradle e camadas Docker agilizam builds. PRs/branches de trabalho só leem
   o cache Gradle; publicação exige push em `development` ou `main`.
 

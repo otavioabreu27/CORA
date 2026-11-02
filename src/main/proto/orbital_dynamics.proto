@@ -1,0 +1,380 @@
+syntax = "proto3";
+
+package inpe.ccs.orbital_dynamics.v1;
+
+option java_multiple_files = true;
+option java_package = "inpe.ccs.orbital_dynamics.grpc.v1";
+option java_outer_classname = "OrbitalDynamicsProto";
+
+import "google/protobuf/timestamp.proto";
+
+// API do serviço L2 de dinâmica orbital.
+//
+// Erros esperados:
+// - INVALID_ARGUMENT: seletor, janela, passo, máscara ou filtro inválido.
+// - NOT_FOUND: objeto ou estação ausente no L1.
+// - UNIMPLEMENTED: método de propagação ainda não suportado.
+// - FAILED_PRECONDITION: órbita decaída ou geometria inválida.
+// - UNAVAILABLE/DEADLINE_EXCEEDED: falha do coletor ou do catálogo.
+// - INTERNAL: falha inesperada.
+service OrbitalDynamics {
+  // Lê a epoch mais recente do objeto no celestrak-collector.
+  rpc GetElements(GetElementsRequest) returns (Elements);
+
+  // Lista/filtra satélites do coletor (última epoch por CATNR).
+  rpc ListSatellites(ListSatellitesRequest) returns (ElementsPage);
+
+  // Lista/filtra estações do groundstation-catalog.
+  rpc ListStations(ListStationsRequest) returns (StationPage);
+
+  // Pegada poligonal WGS84 do cone de visibilidade.
+  rpc GetVisibilityFootprint(GetVisibilityFootprintRequest) returns (VisibilityFootprint);
+
+  // Propaga um objeto em uma janela. Hoje apenas SGP4 near-earth.
+  rpc Propagate(PropagateRequest) returns (PropagateResponse);
+
+  // Calcula passagens por uma estação do groundstation-catalog.
+  rpc PredictPasses(PredictPassesRequest) returns (PredictPassesResponse);
+
+  // Triagem de conjunções contra candidatos do celestrak-collector.
+  rpc ScreenConjunctions(ScreenConjunctionsRequest) returns (ScreenConjunctionsResponse);
+
+  // Saúde local; não verifica os L1.
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+enum Collection {
+  COLLECTION_UNSPECIFIED = 0;
+  SATELLITES = 1;
+  STATIONS = 2;
+  DEBRIS = 3;
+}
+
+enum PropagationMethod {
+  METHOD_UNSPECIFIED = 0;
+  METHOD_SGP4 = 1;   // SGP4/SDP4 automático pela época e pelo período
+  METHOD_SDP4 = 2;   // alias explícito para o mesmo modelo automático
+  METHOD_KEPLER = 3; // dois corpos analítico
+  METHOD_J2 = 4;     // J2 secular
+  METHOD_RK4 = 5;    // integração numérica dois corpos + J2
+  METHOD_RKF45 = 6;  // reservado; ainda não implementado
+}
+
+enum EphemerisType {
+  EPHEMERIS_UNSPECIFIED = 0;
+  EPHEMERIS_SGP = 1;
+  EPHEMERIS_SGP4 = 2;
+  EPHEMERIS_SDP4 = 3;
+  EPHEMERIS_SGP8 = 4;
+  EPHEMERIS_SDP8 = 5;
+}
+
+enum Classification {
+  CLASSIFICATION_UNSPECIFIED = 0;
+  CLASSIFICATION_UNCLASSIFIED = 1;
+  CLASSIFICATION_CLASSIFIED = 2;
+  CLASSIFICATION_SECRET = 3;
+}
+
+message ObjectRef {
+  Collection collection = 1;
+
+  oneof key {
+    int64 cat_id = 2;
+    string exact_name = 3; // comparação sem diferenciar caixa no coleitor
+  }
+}
+
+message Elements {
+  optional string object_name = 1;
+  optional string object_id = 2;
+  google.protobuf.Timestamp epoch = 3;
+  double mean_motion = 4; // rev/dia
+  double eccentricity = 5;
+  double inclination_deg = 6;
+  double raan_deg = 7;
+  double arg_perigee_deg = 8;
+  double mean_anomaly_deg = 9;
+  optional EphemerisType ephemeris_type = 10;
+  optional Classification classification = 11;
+  int64 norad_cat_id = 12;
+  int64 element_set_no = 13;
+  int64 rev_at_epoch = 14;
+  double bstar = 15;
+  double mean_motion_dot = 16;
+  double mean_motion_ddot = 17;
+  Collection collection = 18;
+  repeated int32 source_groups = 19;
+}
+
+message Cartesian {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+message Geodetic {
+  double latitude_deg = 1;
+  double longitude_deg = 2;
+  double altitude_m = 3;
+}
+
+// Política de escolha do TLE para reconstrução histórica.
+enum TlePolicy {
+  TLE_POLICY_LATEST = 0;   // comportamento anterior: um único TLE mais recente
+  TLE_POLICY_NEAREST = 1;  // epoch mais próxima em valor absoluto
+  TLE_POLICY_AS_OF = 2;    // último TLE com epoch <= instante
+}
+
+message TlePolicyOptions {
+  TlePolicy policy = 1;
+  // 0 = sem limite. Em horas; aplica-se ao TLE selecionado.
+  double max_age_hours = 2;
+}
+
+message TleRef {
+  google.protobuf.Timestamp epoch = 1;
+  double delta_hours = 2; // positivo = TLE passado; negativo = TLE futuro
+  bool stale = 3;         // idade absoluta acima de max_age_hours
+}
+
+message PropagatedState {
+  google.protobuf.Timestamp time = 1;
+  Cartesian position_km = 2;      // TEME
+  Cartesian velocity_km_s = 3;    // TEME
+  Cartesian ecef_position_km = 4;
+  Cartesian ecef_velocity_km_s = 5;
+  Geodetic geodetic = 6;
+  TleRef tle = 7;
+}
+
+message TimeWindow {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+}
+
+message GetElementsRequest {
+  ObjectRef object = 1;
+}
+
+message PropagateRequest {
+  ObjectRef object = 1;
+  PropagationMethod method = 2;
+  TimeWindow window = 3;
+  int32 step_seconds = 4; // 0 = 60; permitido 1..3600
+  TlePolicyOptions tle = 5; // ausente/0 = TLE_POLICY_LATEST
+}
+
+message PropagateResponse {
+  Elements elements = 1;
+  PropagationMethod method = 2;
+  repeated PropagatedState states = 3;
+  repeated TleRef tles = 4; // TLEs distintos usados na resposta
+}
+
+enum StationSource {
+  STATION_SOURCE_UNSPECIFIED = 0;
+  STATION_SOURCE_INPE = 1;
+  STATION_SOURCE_ESA = 2;
+}
+
+enum StationStatus {
+  STATION_STATUS_UNSPECIFIED = 0;
+  STATION_STATUS_PLANNED = 1;
+  STATION_STATUS_ACTIVE = 2;
+  STATION_STATUS_INACTIVE = 3;
+  STATION_STATUS_DECOMMISSIONED = 4;
+}
+
+message Station {
+  int64 id = 1;
+  string code = 2;
+  string name = 3;
+  double latitude_deg = 4;
+  double longitude_deg = 5;
+  double altitude_m = 6;
+  double min_elevation_deg = 7;
+  optional string operator = 8;
+  optional string country_code = 9;
+  optional string time_zone = 10;
+  StationSource source = 11;
+  StationStatus status = 12;
+  int64 version = 13;
+  optional string description = 14;
+}
+
+message GeoPoint {
+  double latitude_deg = 1;
+  double longitude_deg = 2;
+}
+
+message VisibilityFootprint {
+  Station station = 1;
+  double min_elevation_deg = 2;
+  double true_elevation_deg = 3;
+  double half_angle_deg = 4;
+  double satellite_altitude_m = 5;
+  repeated GeoPoint points = 6; // contorno WGS84, altitude 0; não repete o primeiro
+  double min_radius_km = 7;
+  double max_radius_km = 8;
+  double mean_radius_km = 9;
+  double max_range_km = 10;
+  bool refraction = 11;
+}
+
+message GetVisibilityFootprintRequest {
+  string station_code = 1;
+  // Se ausente, usa object + at para obter a altitude real do satélite.
+  optional double satellite_altitude_m = 2;
+  optional ObjectRef object = 3;
+  google.protobuf.Timestamp at = 4;
+  optional double min_elevation_deg = 5; // ausente = máscara da estação
+  bool refraction = 6;
+  int32 samples = 7; // 0 = 72; 8..720
+}
+
+message ListStationsRequest {
+  StationFilter filter = 1;
+  int32 page_size = 2;   // 0 = 50; 1..500
+  string page_token = 3;
+}
+
+message StationFilter {
+  repeated StationStatus status = 1; // vazio = todos
+  optional string country_code = 2;
+  optional string operator = 3;
+  optional StationSource source = 4;
+  optional string query = 5; // trecho em code/name; vazio desativa
+}
+
+message StationPage {
+  repeated Station stations = 1;
+  string next_page_token = 2;
+  int64 total_size = 3;
+}
+
+message ListSatellitesRequest {
+  SatelliteFilter filter = 1;
+  int32 page_size = 2;   // 0 = 100; 1..500
+  string page_token = 3;
+}
+
+message SatelliteFilter {
+  Collection collection = 1;
+  repeated int64 cat_ids = 2; // até 1000
+  string name = 3;
+  NameMatch name_match = 4;
+  int32 group = 5; // SourceGroup do coletor; 0 desativa
+}
+
+enum NameMatch {
+  NAME_CONTAINS = 0;
+  NAME_EXACT = 1;
+  NAME_ILIKE = 2;
+}
+
+message ElementsPage {
+  repeated Elements elements = 1;
+  string next_page_token = 2;
+}
+
+message PredictPassesRequest {
+  ObjectRef object = 1;
+  string station_code = 2;
+  TimeWindow window = 3;
+  int32 step_seconds = 4;             // 0 = 30; permitido 1..3600
+  optional double min_elevation_deg = 5; // ausente = máscara da estação
+
+  // Ticks internos de cada passagem. Ausente = 30 s; 0 desabilita.
+  optional int32 tick_seconds = 6;
+  // Frequência de downlink para Doppler; ausente = 0 (não calcula).
+  optional double downlink_frequency_hz = 7;
+  // Limiar de elevação para marcar passagem zenital; ausente = 85°.
+  optional double zenith_elevation_deg = 8;
+  // Inclui o footprint WGS84 no TCA de cada passagem.
+  bool include_footprint = 9;
+  bool refraction = 10;
+  int32 footprint_samples = 11; // 0 = 72; 8..720
+  bool include_tick_footprints = 12;
+  TlePolicyOptions tle = 13;
+}
+
+// Uma linha da tabela de previsão (equivalente ao PVP).
+message PassTick {
+  google.protobuf.Timestamp time = 1;
+  double azimuth_deg = 2;       // contínuo; pode passar de 360
+  double elevation_deg = 3;
+  double range_km = 4;
+  double range_rate_km_s = 5;   // positivo quando a distância aumenta
+  double doppler_khz = 6;
+  double doppler_rate_khz_s = 7;
+  bool eclipse = 8;
+  bool zenith_pass = 9;
+  bool sun_pointing = 10;       // sem modelo de atitude; falso nesta versão
+  double satellite_altitude_m = 11;
+  VisibilityFootprint footprint = 12; // presente se include_tick_footprints=true
+}
+
+message Pass {
+  google.protobuf.Timestamp aos = 1;
+  google.protobuf.Timestamp tca = 2;
+  google.protobuf.Timestamp los = 3;
+  bool aos_within_window = 4;
+  bool los_within_window = 5;
+  double max_elevation_deg = 6;
+  double max_elevation_azimuth_deg = 7;
+  double aos_azimuth_deg = 8;
+  double tca_azimuth_deg = 9;
+  double los_azimuth_deg = 10;
+  double duration_seconds = 11;
+  bool zenith_pass = 12;
+  repeated PassTick ticks = 13;
+  VisibilityFootprint footprint = 14; // presente se include_footprint=true
+  TleRef tle = 15; // TLE fixado no AOS da passagem
+}
+
+message PredictPassesResponse {
+  Elements elements = 1;
+  Station station = 2;
+  repeated Pass passes = 3;
+}
+
+message CandidateFilter {
+  Collection collection = 1; // padrão SATELLITES
+  repeated int64 cat_ids = 2; // até 1000
+  string name = 3;            // trecho contido; vazio desativa
+  int32 group = 4;            // código SourceGroup; 0 desativa
+  int32 max_candidates = 5;   // 0 = 1000; permitido 1..5000
+}
+
+message ScreenConjunctionsRequest {
+  ObjectRef primary = 1;
+  TimeWindow window = 2;
+  int32 step_seconds = 3;             // 0 = 60; permitido 1..3600
+  double screening_distance_km = 4;   // 0 = 50
+  double report_threshold_km = 5;     // 0 = 10
+  int32 max_results = 6;              // 0 = 100
+  CandidateFilter candidates = 7;
+}
+
+message Conjunction {
+  int64 primary_cat_id = 1;
+  int64 secondary_cat_id = 2;
+  optional string secondary_name = 3;
+  google.protobuf.Timestamp tca = 4;
+  double miss_distance_km = 5;
+  double relative_velocity_km_s = 6;
+}
+
+message ScreenConjunctionsResponse {
+  Elements primary = 1;
+  repeated Conjunction conjunctions = 2;
+  int32 candidates_considered = 3;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool ok = 1;
+  string version = 2;
+}

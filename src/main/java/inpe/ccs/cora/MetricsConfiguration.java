@@ -1,4 +1,4 @@
-package inpe.ccs.l1servicetemplate;
+package inpe.ccs.cora;
 
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.config.MeterFilter;

@@ -11,33 +11,20 @@ repositories {
 group = providers.gradleProperty('groupId').get()
 version = providers.gradleProperty('serviceVersion').get()
 
-def lombokVersion = '1.18.48'
-def mapstructVersion = '1.6.3'
-
 dependencies {
     implementation enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}")
     // The Quarkus plugin generates protobuf messages and gRPC stubs from src/main/proto.
     implementation 'io.quarkus:quarkus-grpc'
-    implementation 'io.quarkus:quarkus-rest-client-jackson'
-    implementation 'io.quarkus:quarkus-hibernate-orm-panache'
-    implementation 'io.quarkiverse.rabbitmqclient:quarkus-rabbitmq-client:3.4.1'
-    implementation 'io.quarkus:quarkus-jdbc-postgresql'
     implementation 'io.quarkus:quarkus-arc'
     implementation 'io.quarkus:quarkus-rest'
+    implementation 'io.quarkus:quarkus-rest-jackson'
+    implementation 'dev.langchain4j:langchain4j:1.23.0'
+    implementation 'dev.langchain4j:langchain4j-open-ai:1.23.0'
     implementation 'io.quarkus:quarkus-micrometer-registry-prometheus'
     implementation 'io.quarkus:quarkus-smallrye-health'
-    implementation "org.mapstruct:mapstruct:${mapstructVersion}"
 
     testImplementation 'io.quarkus:quarkus-junit'
     testImplementation 'io.rest-assured:rest-assured'
-}
-
-// Apply processors to main, test and Quarkus native-test source sets.
-sourceSets.configureEach {
-    dependencies.add(compileOnlyConfigurationName, "org.projectlombok:lombok:${lombokVersion}")
-    dependencies.add(annotationProcessorConfigurationName, "org.projectlombok:lombok:${lombokVersion}")
-    dependencies.add(annotationProcessorConfigurationName, 'org.projectlombok:lombok-mapstruct-binding:0.2.0')
-    dependencies.add(annotationProcessorConfigurationName, "org.mapstruct:mapstruct-processor:${mapstructVersion}")
 }
 
 java {
@@ -66,12 +53,7 @@ eclipse {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    options.compilerArgs += [
-        '-parameters',
-        '-Amapstruct.defaultComponentModel=jakarta-cdi',
-        '-Amapstruct.defaultInjectionStrategy=constructor',
-        '-Amapstruct.suppressGeneratorTimestamp=true'
-    ]
+    options.compilerArgs += ['-parameters']
 }
 
 processResources {
