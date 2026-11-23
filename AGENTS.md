@@ -2,7 +2,7 @@
 
 ## Contexto
 
-CORA é o serviço **L3** de assistência orbital do INPE/CCS. Ele é uma fachada
+CORA é um serviço **L3** independente de assistência orbital. Ele é uma fachada
 REST/JSON que consome o L2 `orbital-dynamics` por gRPC. A aplicação usa Java 25,
 Quarkus, Gradle Wrapper, gRPC client, REST/Jackson, Micrometer/Prometheus e health
 checks.

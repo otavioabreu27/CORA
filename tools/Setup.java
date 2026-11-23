@@ -20,7 +20,7 @@ public class Setup {
         var args = new ArrayList<>(List.of(arguments));
         if (args.remove("--help") || args.remove("-h")) {
             System.out.println("Uso: setup.sh|setup.bat [--dry-run] <nome-do-servico> [grupo] [versao]");
-            System.out.println("Exemplo: setup.sh telemetry-ingest inpe.ccs 1.0.0-SNAPSHOT");
+            System.out.println("Exemplo: setup.sh telemetry-ingest org.orbitalsuite 1.0.0-SNAPSHOT");
             return;
         }
         boolean dryRun = args.remove("--dry-run");
@@ -38,7 +38,7 @@ public class Setup {
         var properties = new Properties();
         properties.load(new java.io.StringReader(propertiesText));
         String name = args.get(0);
-        String group = args.size() > 1 ? args.get(1) : properties.getProperty("groupId", "inpe.ccs");
+        String group = args.size() > 1 ? args.get(1) : properties.getProperty("groupId", "org.orbitalsuite");
         String version = args.size() > 2 ? args.get(2) : properties.getProperty("serviceVersion", "1.0.0-SNAPSHOT");
         require(name.matches("[a-z][a-z0-9-]{0,62}"), "Nome: 1 a 63 caracteres; letras minusculas, numeros e hifens.");
         require(group.matches("[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*"), "Grupo Java invalido.");

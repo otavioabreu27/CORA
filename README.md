@@ -1,18 +1,12 @@
-<p align="center">
-  <a href="https://www.gov.br/inpe/pt-br">
-    <img src="docs/assets/inpe-logo.png" alt="Instituto Nacional de Pesquisas Espaciais — INPE" width="144" />
-  </a>
-</p>
+# CORA
 
-<h1 align="center">INPE · CCS</h1>
-<p align="center"><strong>CORA — Assistente Orbital · Nível 3</strong></p>
+Assistente orbital independente e fachada REST para o serviço `orbital-dynamics`.
+
 <p align="center">Fachada REST, cliente gRPC do orbital-dynamics e agente com ferramentas.</p>
 <p align="center">
   <code>Java 25</code> &nbsp; <code>Quarkus</code> &nbsp; <code>gRPC client</code> &nbsp;
   <code>REST/JSON</code> &nbsp; <code>Prometheus</code>
 </p>
-
----
 
 ## Identificação do serviço
 
@@ -296,3 +290,8 @@ Os filtros das ferramentas de catálogo são opcionais no schema enviado ao mode
 Para buscar por nome, o agente omite NORAD e grupo em vez de preencher números
 fictícios; zero no NORAD opcional é tratado como filtro ausente. Parâmetros
 opcionais de propagação, passagens e camadas também podem ser omitidos.
+
+## Licença
+
+Distribuído sob a [licença MIT](LICENSE). Dependências e materiais de terceiros
+mantêm suas próprias licenças e condições de uso.
