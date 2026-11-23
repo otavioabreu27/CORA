@@ -80,7 +80,7 @@ jobs:
           -Dquarkus.package.jar.enabled=false
           -Dquarkus.native.container-build=true
           -Dquarkus.native.native-image-xmx=4g
-          -Dquarkus.native.additional-build-args=-march=compatibility
+          -Dquarkus.native.additional-build-args=-march=compatibility,--initialize-at-run-time=dev.langchain4j.internal.RetryUtils
           -Dquarkus.test.integration-test-profile=test
       - name: Save native test reports
         if: always() && github.ref == 'refs/heads/main'

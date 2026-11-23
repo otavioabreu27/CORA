@@ -1,12 +1,11 @@
 package inpe.ccs.cora.api;
 
-import java.time.Instant;
-import java.time.format.DateTimeParseException;
+import java.util.function.Supplier;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.google.protobuf.Timestamp;
 import com.google.protobuf.util.JsonFormat;
 
+import inpe.ccs.cora.OrbitalInputs;
 import inpe.ccs.cora.client.OrbitalDynamicsClient;
 import inpe.ccs.orbital_dynamics.grpc.v1.Collection;
 import inpe.ccs.orbital_dynamics.grpc.v1.GetVisibilityFootprintRequest;
@@ -23,7 +22,6 @@ import inpe.ccs.orbital_dynamics.grpc.v1.SatelliteFilter;
 import inpe.ccs.orbital_dynamics.grpc.v1.StationFilter;
 import inpe.ccs.orbital_dynamics.grpc.v1.StationSource;
 import inpe.ccs.orbital_dynamics.grpc.v1.StationStatus;
-import inpe.ccs.orbital_dynamics.grpc.v1.TimeWindow;
 import io.quarkus.logging.Log;
 import io.smallrye.common.annotation.Blocking;
 import jakarta.inject.Inject;
@@ -60,7 +58,7 @@ public class CoraResource {
     @GET
     @Path("/elements/{catId}")
     public String elements(@PathParam("catId") long catId) {
-        return json(orbital.getElements(catId));
+        return json(orbital.getElements(input(() -> OrbitalInputs.positiveId(catId, "catId"))));
     }
 
     @GET
@@ -75,14 +73,14 @@ public class CoraResource {
             filter.setName(name).setNameMatch(NameMatch.NAME_CONTAINS);
         }
         if (catId != null) {
-            filter.addCatIds(catId);
+            filter.addCatIds(input(() -> OrbitalInputs.positiveId(catId, "catId")));
         }
-        if (group != null && group > 0) {
-            filter.setGroup(group);
+        if (group != null) {
+            filter.setGroup(input(() -> Math.toIntExact(OrbitalInputs.positiveId(group.longValue(), "group"))));
         }
         var request = ListSatellitesRequest.newBuilder()
                 .setFilter(filter)
-                .setPageSize(pageSize == null ? 0 : pageSize)
+                .setPageSize(input(() -> OrbitalInputs.defaultableRange(pageSize, "pageSize", 1, 500)))
                 .setPageToken(pageToken == null ? "" : pageToken)
                 .build();
         return json(orbital.listSatellites(request));
@@ -99,10 +97,12 @@ public class CoraResource {
                            @QueryParam("pageToken") String pageToken) {
         var filter = StationFilter.newBuilder();
         if (source != null && !source.isBlank()) {
-            filter.setSource(enumValue(StationSource.class, "STATION_SOURCE_" + source));
+            filter.setSource(input(() -> OrbitalInputs.enumValue(
+                    StationSource.class, "STATION_SOURCE_" + source)));
         }
         if (status != null && !status.isBlank()) {
-            filter.addStatus(enumValue(StationStatus.class, "STATION_STATUS_" + status));
+            filter.addStatus(input(() -> OrbitalInputs.enumValue(
+                    StationStatus.class, "STATION_STATUS_" + status)));
         }
         if (countryCode != null && !countryCode.isBlank()) {
             filter.setCountryCode(countryCode);
@@ -115,7 +115,7 @@ public class CoraResource {
         }
         var request = ListStationsRequest.newBuilder()
                 .setFilter(filter)
-                .setPageSize(pageSize == null ? 0 : pageSize)
+                .setPageSize(input(() -> OrbitalInputs.defaultableRange(pageSize, "pageSize", 1, 500)))
                 .setPageToken(pageToken == null ? "" : pageToken)
                 .build();
         return json(orbital.listStations(request));
@@ -124,80 +124,92 @@ public class CoraResource {
     @POST
     @Path("/passes")
     public String passes(PassRequest body) {
-        if (body == null || body.catId() == null || body.stationCode() == null
-                || body.start() == null || body.end() == null) {
-            throw new BadRequestException("catId, stationCode, start e end são obrigatórios");
+        var request = input(() -> passRequest(body));
+        return json(orbital.predictPasses(request));
+    }
+
+    private PredictPassesRequest passRequest(PassRequest body) {
+        if (body == null) {
+            throw new IllegalArgumentException("request body is required");
         }
         var request = PredictPassesRequest.newBuilder()
                 .setObject(ObjectRef.newBuilder()
                         .setCollection(Collection.SATELLITES)
-                        .setCatId(body.catId()))
-                .setStationCode(body.stationCode())
-                .setWindow(TimeWindow.newBuilder()
-                        .setStart(timestamp(body.start()))
-                        .setEnd(timestamp(body.end())))
-                .setStepSeconds(body.stepSeconds() == null ? 0 : body.stepSeconds())
-                .setTickSeconds(body.tickSeconds() == null ? 0 : body.tickSeconds())
+                        .setCatId(OrbitalInputs.positiveId(body.catId(), "catId")))
+                .setStationCode(OrbitalInputs.requiredText(body.stationCode(), "stationCode"))
+                .setWindow(OrbitalInputs.window(body.start(), body.end()))
+                .setStepSeconds(OrbitalInputs.defaultableRange(body.stepSeconds(), "stepSeconds", 1, 3600))
                 .setIncludeFootprint(Boolean.TRUE.equals(body.includeFootprint()))
                 .setIncludeTickFootprints(Boolean.TRUE.equals(body.includeTickFootprints()))
                 .setRefraction(Boolean.TRUE.equals(body.refraction()))
-                .setFootprintSamples(body.footprintSamples() == null ? 0 : body.footprintSamples());
+                .setFootprintSamples(OrbitalInputs.defaultableRange(body.footprintSamples(), "footprintSamples", 8, 720));
+        if (body.tickSeconds() != null) {
+            request.setTickSeconds(OrbitalInputs.defaultableRange(body.tickSeconds(), "tickSeconds", 1, 3600));
+        }
         if (body.downlinkFrequencyHz() != null) {
-            request.setDownlinkFrequencyHz(body.downlinkFrequencyHz());
+            request.setDownlinkFrequencyHz(OrbitalInputs.positive(body.downlinkFrequencyHz(), "downlinkFrequencyHz"));
         }
         request.setTle(tleOptions(body.tlePolicy(), body.maxTleAgeHours()));
-        return json(orbital.predictPasses(request.build()));
+        return request.build();
     }
 
     @POST
     @Path("/orbit")
     public String orbit(OrbitRequest body) {
-        if (body == null || body.catId() == null || body.start() == null || body.end() == null) {
-            throw new BadRequestException("catId, start e end são obrigatórios");
+        var request = input(() -> orbitRequest(body));
+        return json(orbital.propagate(request));
+    }
+
+    private PropagateRequest orbitRequest(OrbitRequest body) {
+        if (body == null) {
+            throw new IllegalArgumentException("request body is required");
         }
         var method = body.method() == null || body.method().isBlank()
                          ? PropagationMethod.METHOD_SGP4
-                         : enumValue(PropagationMethod.class,
-                                     body.method().toUpperCase().startsWith("METHOD_")
-                                         ? body.method()
-                                         : "METHOD_" + body.method());
-        var request = PropagateRequest.newBuilder()
+                         : OrbitalInputs.prefixedEnumValue(
+                                 PropagationMethod.class, body.method(), "METHOD_");
+        return PropagateRequest.newBuilder()
                 .setObject(ObjectRef.newBuilder()
                         .setCollection(Collection.SATELLITES)
-                        .setCatId(body.catId()))
+                        .setCatId(OrbitalInputs.positiveId(body.catId(), "catId")))
                 .setMethod(method)
-                .setWindow(TimeWindow.newBuilder()
-                        .setStart(timestamp(body.start()))
-                        .setEnd(timestamp(body.end())))
-                .setStepSeconds(body.stepSeconds() == null ? 0 : body.stepSeconds())
-                .setTle(tleOptions(body.tlePolicy(), body.maxTleAgeHours()));
-        return json(orbital.propagate(request.build()));
+                .setWindow(OrbitalInputs.window(body.start(), body.end()))
+                .setStepSeconds(OrbitalInputs.defaultableRange(body.stepSeconds(), "stepSeconds", 1, 3600))
+                .setTle(tleOptions(body.tlePolicy(), body.maxTleAgeHours()))
+                .build();
     }
 
     @POST
     @Path("/footprint")
     public String footprint(FootprintRequest body) {
-        if (body == null || body.stationCode() == null
-                || (body.satelliteAltitudeM() == null && (body.catId() == null || body.at() == null))) {
-            throw new BadRequestException(
-                    "stationCode e satelliteAltitudeM (ou catId + at) são obrigatórios");
+        var request = input(() -> footprintRequest(body));
+        return json(orbital.getVisibilityFootprint(request));
+    }
+
+    private GetVisibilityFootprintRequest footprintRequest(FootprintRequest body) {
+        if (body == null) {
+            throw new IllegalArgumentException("request body is required");
         }
         var request = GetVisibilityFootprintRequest.newBuilder()
-                .setStationCode(body.stationCode())
+                .setStationCode(OrbitalInputs.requiredText(body.stationCode(), "stationCode"))
                 .setRefraction(Boolean.TRUE.equals(body.refraction()))
-                .setSamples(body.samples() == null ? 0 : body.samples());
+                .setSamples(OrbitalInputs.defaultableRange(body.samples(), "samples", 8, 720));
         if (body.satelliteAltitudeM() != null) {
-            request.setSatelliteAltitudeM(body.satelliteAltitudeM());
+            request.setSatelliteAltitudeM(OrbitalInputs.positive(body.satelliteAltitudeM(), "satelliteAltitudeM"));
         } else {
             request.setObject(ObjectRef.newBuilder()
                     .setCollection(Collection.SATELLITES)
-                    .setCatId(body.catId()));
-            request.setAt(timestamp(body.at()));
+                    .setCatId(OrbitalInputs.positiveId(body.catId(), "catId")));
+            request.setAt(OrbitalInputs.timestamp(body.at()));
         }
         if (body.minElevationDeg() != null) {
-            request.setMinElevationDeg(body.minElevationDeg());
+            double elevation = OrbitalInputs.nonNegative(body.minElevationDeg(), "minElevationDeg");
+            if (elevation > 90) {
+                throw new IllegalArgumentException("minElevationDeg must not exceed 90");
+            }
+            request.setMinElevationDeg(elevation);
         }
-        return json(orbital.getVisibilityFootprint(request.build()));
+        return request.build();
     }
 
     private String json(com.google.protobuf.MessageOrBuilder message) {
@@ -205,42 +217,27 @@ public class CoraResource {
             return JsonFormat.printer().print(message);
         } catch (InvalidProtocolBufferException e) {
             Log.error("Falha ao serializar resposta protobuf", e);
-            throw new IllegalStateException("resposta gRPC inválida", e);
+            throw new IllegalStateException("invalid gRPC response", e);
         }
     }
 
     private TlePolicyOptions tleOptions(String policy, Double maxAgeHours) {
         var builder = TlePolicyOptions.newBuilder();
         if (policy != null && !policy.isBlank()) {
-            String name = policy.toUpperCase().replace('-', '_');
-            if (!name.startsWith("TLE_POLICY_")) {
-                name = "TLE_POLICY_" + name;
-            }
-            builder.setPolicy(enumValue(TlePolicy.class, name));
+            builder.setPolicy(OrbitalInputs.prefixedEnumValue(
+                    TlePolicy.class, policy, "TLE_POLICY_"));
         }
         if (maxAgeHours != null) {
-            builder.setMaxAgeHours(maxAgeHours);
+            builder.setMaxAgeHours(OrbitalInputs.nonNegative(maxAgeHours, "maxTleAgeHours"));
         }
         return builder.build();
     }
 
-    private Timestamp timestamp(String value) {
+    private <T> T input(Supplier<T> supplier) {
         try {
-            var instant = Instant.parse(value);
-            return Timestamp.newBuilder()
-                    .setSeconds(instant.getEpochSecond())
-                    .setNanos(instant.getNano())
-                    .build();
-        } catch (DateTimeParseException e) {
-            throw new BadRequestException("timestamp inválido (use RFC 3339 UTC): " + value);
-        }
-    }
-
-    private <E extends Enum<E>> E enumValue(Class<E> type, String value) {
-        try {
-            return Enum.valueOf(type, value.toUpperCase().replace('-', '_'));
+            return supplier.get();
         } catch (IllegalArgumentException e) {
-            throw new BadRequestException("valor inválido: " + value);
+            throw new BadRequestException(e.getMessage(), e);
         }
     }
 

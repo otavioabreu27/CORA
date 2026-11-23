@@ -2,6 +2,7 @@ package inpe.ccs.cora.ai;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.langchain4j.agent.tool.P;
 import inpe.ccs.cora.client.OrbitalDynamicsClient;
@@ -23,6 +24,17 @@ class OrbitalToolsTest {
         assertEquals(0, client.request.getFilter().getGroup());
         tools.listSatellites("AMAZONIA", 0L, 0);
         assertEquals(0, client.request.getFilter().getCatIdsCount());
+    }
+
+    @Test void rejectsIncompleteFootprintAndInvalidWindowsBeforeCallingL2() {
+        var tools = new OrbitalTools();
+        tools.orbital = new RecordingClient();
+
+        assertThrows(IllegalArgumentException.class,
+                () -> tools.getVisibilityFootprint("INPE-ALC", null, null, null, false, 36));
+        assertThrows(IllegalArgumentException.class,
+                () -> tools.propagate(44883, "2026-11-02T01:00:00Z",
+                        "2026-11-02T00:00:00Z", 60, null, null));
     }
 
     private static class RecordingClient extends OrbitalDynamicsClient {

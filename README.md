@@ -117,6 +117,11 @@ curl -s -X POST http://localhost:8090/api/footprint \
 As respostas são o JSON canônico dos protobufs do L2 (`JsonFormat`), com
 `camelCase` e timestamps RFC 3339.
 
+Entradas inválidas retornam `400`. Falhas conhecidas do L2 são traduzidas para
+HTTP (`400` para argumento inválido, `404` para recurso ausente, `503` para
+indisponibilidade e `504` para deadline/timeout); falhas inesperadas do upstream
+retornam `502`. A resposta de erro tem os campos `error` e `message`.
+
 ## Agente de IA
 
 O `/api/chat` usa **LangChain4j** com um provedor OpenAI-compatible. O provedor
@@ -236,9 +241,10 @@ curl -s http://localhost:8090/api/info
 
 ## Testes
 
-- `CoraResourceTest`: identidade REST sem depender de banco ou gRPC.
+- `CoraResourceTest`: identidade, validação REST, defaults protobuf e tradução de erros gRPC com L2 simulado.
 - `InstrumentationTest`: health e métricas JVM/HTTP com labels de identidade.
 - `SetupTest`: personalização do template.
+- `CoraAssistantServiceTest`: coleta e descarte das ações após sucesso ou falha do provedor.
 - `CoraApplicationIT`: smoke test do pacote.
 
 Os testes **não** chamam o L2 real; as chamadas gRPC são validadas no smoke test

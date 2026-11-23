@@ -24,6 +24,7 @@ dependencies {
     implementation 'io.quarkus:quarkus-smallrye-health'
 
     testImplementation 'io.quarkus:quarkus-junit'
+    testImplementation 'io.quarkus:quarkus-junit-mockito'
     testImplementation 'io.rest-assured:rest-assured'
 }
 

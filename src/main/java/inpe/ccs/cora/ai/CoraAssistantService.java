@@ -43,18 +43,22 @@ public class CoraAssistantService {
     public ChatResult chat(String message) {
         if (!enabled) {
             throw new ServiceUnavailableException(
-                    "IA desabilitada; configure CORA_AI_ENABLED=true e o provedor");
+                    "AI is disabled; set CORA_AI_ENABLED=true and configure the provider");
         }
         if (apiKey == null || apiKey.isBlank() || "CHANGE_ME".equals(apiKey)) {
             throw new ServiceUnavailableException(
-                    "CORA_AI_API_KEY não configurada para o provedor DeepSeek");
+                    "CORA_AI_API_KEY is not configured for the DeepSeek provider");
         }
         if (message == null || message.isBlank()) {
-            throw new IllegalArgumentException("message é obrigatória");
+            throw new IllegalArgumentException("message is required");
         }
         actions.clear();
-        var answer = assistant().chat(message);
-        return new ChatResult(answer, actions.snapshot());
+        try {
+            var answer = assistant().chat(message);
+            return new ChatResult(answer, actions.snapshot());
+        } finally {
+            actions.release();
+        }
     }
 
     private CoraAssistant assistant() {

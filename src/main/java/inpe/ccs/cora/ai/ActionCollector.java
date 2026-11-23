@@ -6,7 +6,7 @@ import java.util.Map;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
-/** Coleta ações de UI emitidas pelas ferramentas durante uma chamada de chat. */
+/** Collects UI actions emitted by tools during a chat call. */
 @ApplicationScoped
 public class ActionCollector {
 
@@ -30,5 +30,9 @@ public class ActionCollector {
 
     public List<Action> snapshot() {
         return List.copyOf(actions.get());
+    }
+
+    public void release() {
+        actions.remove();
     }
 }

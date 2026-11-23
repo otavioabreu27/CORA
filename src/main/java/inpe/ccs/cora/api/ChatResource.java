@@ -25,13 +25,13 @@ public class ChatResource {
     @POST
     public ChatResponse chat(ChatRequest request) {
         if (request == null || request.message() == null || request.message().isBlank()) {
-            throw new BadRequestException("message é obrigatória");
+            throw new BadRequestException("message is required");
         }
         var context = new StringBuilder();
         if (request.selection() != null) {
-            context.append("Seleção atual da UI: satélites=")
+            context.append("Current UI selection: satellites=")
                     .append(request.selection().satellites())
-                    .append(", estações=")
+                    .append(", stations=")
                     .append(request.selection().stations())
                     .append(". ");
         }

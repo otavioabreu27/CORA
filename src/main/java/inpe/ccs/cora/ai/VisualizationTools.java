@@ -15,54 +15,54 @@ import jakarta.inject.Inject;
 public class VisualizationTools {
     @Inject ActionCollector actions;
 
-    @Tool("Interrompe o acompanhamento de satélite na câmera, preservando a seleção.")
+    @Tool("Stops satellite camera following while preserving the selection.")
     public String stopFollowing() {
         actions.add("stopFollowing", List.of());
-        return "Ação registrada: parar de seguir o satélite";
+        return "Action registered: stop following the satellite";
     }
 
-    @Tool("Move a câmera do globo. view=world para visão mundial, brazil para Brasil ou home para visão inicial. Encerra foco e acompanhamento.")
+    @Tool("Moves the globe camera. view=world for the world view, brazil for Brazil, or home for the initial view. Ends focus and following.")
     public String setCamera(@P("view") String view) {
-        if (!List.of("world", "brazil", "home").contains(view)) throw new IllegalArgumentException("view deve ser world, brazil ou home");
+        if (!List.of("world", "brazil", "home").contains(view)) throw new IllegalArgumentException("view must be world, brazil, or home");
         actions.add("setCamera", Map.of("view", view));
-        return "Ação registrada: câmera " + view;
+        return "Action registered: camera " + view;
     }
 
-    @Tool("Mostra ou oculta camadas do globo. orbits controla trajetórias; coverage controla área de visibilidade da estação em foco. Null preserva a camada.")
+    @Tool("Shows or hides globe layers. orbits controls trails; coverage controls the visibility area of the focused station. Null preserves the layer.")
     public String setLayers(@P(value = "orbits", required = false) Boolean orbits,
                             @P(value = "coverage", required = false) Boolean coverage) {
         var parameters = new HashMap<String, Object>();
         if (orbits != null) parameters.put("orbits", orbits);
         if (coverage != null) parameters.put("coverage", coverage);
-        if (parameters.isEmpty()) throw new IllegalArgumentException("Informe orbits ou coverage");
+        if (parameters.isEmpty()) throw new IllegalArgumentException("Provide orbits or coverage");
         actions.add("setLayers", parameters);
-        return "Ação registrada: atualizar camadas " + parameters;
+        return "Action registered: update layers " + parameters;
     }
 
-    @Tool("Altera o horário visualizado e pausa a reprodução orbital. at deve ser ISO 8601 com fuso, por exemplo 2026-11-02T18:00:00Z. Não altera a época dos elementos orbitais.")
+    @Tool("Changes the displayed time and pauses orbital playback. at must be ISO 8601 with a time zone, for example 2026-11-02T18:00:00Z. It does not change the orbital element epoch.")
     public String setTime(@P("at") String at) {
         var instant = Instant.parse(at);
         actions.add("setTime", Map.of("at", instant.toString()));
-        return "Ação registrada: horário visualizado " + instant;
+        return "Action registered: displayed time " + instant;
     }
 
-    @Tool("Controla a velocidade da reprodução orbital. rate=0 pausa, 1 tempo normal, 30 acelera 30 vezes, 120 acelera 120 vezes.")
+    @Tool("Controls orbital playback speed. rate=0 pauses, 1 is normal speed, 30 is 30x, 120 is 120x.")
     public String setPlayback(@P("rate") int rate) {
-        if (!List.of(0, 1, 30, 120).contains(rate)) throw new IllegalArgumentException("rate deve ser 0, 1, 30 ou 120");
+        if (!List.of(0, 1, 30, 120).contains(rate)) throw new IllegalArgumentException("rate must be 0, 1, 30, or 120");
         actions.add("setPlayback", Map.of("rate", rate));
-        return "Ação registrada: velocidade " + rate;
+        return "Action registered: speed " + rate;
     }
 
-    @Tool("Volta ao horário atual e à velocidade normal da visualização orbital.")
+    @Tool("Returns to the current time and normal orbital visualization speed.")
     public String goLive() {
         actions.add("goLive", List.of());
-        return "Ação registrada: voltar ao horário atual";
+        return "Action registered: return to current time";
     }
 
-    @Tool("Abre um painel da interface. panel=stations (catálogo de estações), satellites (satélites e tempo), visualization (camadas e câmera), passes (passagens da estação em foco; use focusStation antes).")
+    @Tool("Opens a UI panel. panel=stations (station catalog), satellites (satellites and time), visualization (layers and camera), passes (passes for the focused station; use focusStation first).")
     public String openPanel(@P("panel") String panel) {
-        if (!List.of("stations", "satellites", "visualization", "passes").contains(panel)) throw new IllegalArgumentException("Painel não suportado");
+        if (!List.of("stations", "satellites", "visualization", "passes").contains(panel)) throw new IllegalArgumentException("Unsupported panel");
         actions.add("openPanel", Map.of("panel", panel));
-        return "Ação registrada: abrir painel " + panel;
+        return "Action registered: open panel " + panel;
     }
 }

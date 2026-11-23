@@ -102,7 +102,7 @@ export QUARKUS_NATIVE_BUILDER_IMAGE='quay.io/quarkus/ubi9-quarkus-mandrel-builde
   -Dquarkus.package.jar.enabled=false \
   -Dquarkus.native.container-build=true \
   -Dquarkus.native.native-image-xmx=4g \
-  -Dquarkus.native.additional-build-args=-march=compatibility \
+  -Dquarkus.native.additional-build-args=-march=compatibility,--initialize-at-run-time=dev.langchain4j.internal.RetryUtils \
   -Dquarkus.test.integration-test-profile=test
 docker build -f src/main/docker/Dockerfile.native-micro -t service:native .
 ```

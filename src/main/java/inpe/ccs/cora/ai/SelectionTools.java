@@ -7,41 +7,48 @@ import dev.langchain4j.agent.tool.Tool;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-/** Ferramentas que o LLM pode usar para pedir mudanças na seleção da UI. */
+/** Tools the LLM can use to request changes to the UI selection. */
 @ApplicationScoped
 public class SelectionTools {
 
     @Inject
     ActionCollector actions;
 
-    @Tool("Seleciona satélites de interesse pelo NORAD/catId. Use quando o usuário pedir para mostrar/adicionar satélites.")
+    @Tool("Selects satellites of interest by NORAD/catId. Use when the user asks to show or add satellites.")
     public String selectSatellites(@P("ids") List<Long> ids) {
+        if (ids == null || ids.isEmpty() || ids.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new IllegalArgumentException("ids must contain positive NORAD/catId values");
+        }
         actions.add("selectSatellites", ids.stream().map(String::valueOf).toList());
-        return "Ação registrada: selecionar satélites " + ids;
+        return "Action registered: select satellites " + ids;
     }
 
-    @Tool("Seleciona e segue um satélite no globo, mantendo a câmera acompanhando sua posição orbital. Use quando o usuário pedir para ver, mostrar, focar, seguir ou acompanhar um satélite específico. Consulte o catálogo para obter seu NORAD/catId.")
+    @Tool("Selects and follows a satellite on the globe, keeping the camera tracking its orbital position. Use when the user asks to see, show, focus, follow, or track a specific satellite. Query the catalog to get its NORAD/catId.")
     public String followSatellite(@P("id") long id) {
-        if (id <= 0) throw new IllegalArgumentException("NORAD/catId deve ser positivo");
+        if (id <= 0) throw new IllegalArgumentException("NORAD/catId must be positive");
         actions.add("followSatellite", List.of(String.valueOf(id)));
-        return "Ação registrada: selecionar e seguir o satélite " + id + " no globo";
+        return "Action registered: select and follow satellite " + id + " no globo";
     }
 
-    @Tool("Seleciona estações de interesse pelo código do catálogo, por exemplo INPE-ALC ou ESA-MLG.")
+    @Tool("Selects stations of interest by catalog code, for example INPE-ALC or ESA-MLG.")
     public String selectStations(@P("ids") List<String> ids) {
+        if (ids == null || ids.isEmpty() || ids.stream().anyMatch(id -> id == null || id.isBlank())) {
+            throw new IllegalArgumentException("ids must contain station codes");
+        }
         actions.add("selectStations", ids);
-        return "Ação registrada: selecionar estações " + ids;
+        return "Action registered: select stations " + ids;
     }
 
-    @Tool("Coloca uma estação em foco no globo, pelo código do catálogo.")
+    @Tool("Focuses a station on the globe by catalog code.")
     public String focusStation(@P("id") String id) {
+        if (id == null || id.isBlank()) throw new IllegalArgumentException("station code is required");
         actions.add("focusStation", List.of(id));
-        return "Ação registrada: focar estação " + id;
+        return "Action registered: focus station " + id;
     }
 
-    @Tool("Limpa a seleção de satélites e estações de interesse da visualização.")
+    @Tool("Clears the satellite and station selection of interest from the visualization.")
     public String clearSelection() {
         actions.add("clearSelection", List.of());
-        return "Ação registrada: limpar seleção";
+        return "Action registered: clear selection";
     }
 }
